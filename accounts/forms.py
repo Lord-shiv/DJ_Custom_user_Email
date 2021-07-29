@@ -4,6 +4,7 @@ from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.core.exceptions import ValidationError
 from django.contrib.auth import authenticate
 from .models import User
+from django.contrib import messages
 
 
 class UserAdminCreationForm(forms.ModelForm):
@@ -50,24 +51,6 @@ class UserAdminCreationForm(forms.ModelForm):
         return user
 
 
-# class UserChangeForm(forms.ModelForm):
-#     """A form for updating users. Includes all the fields on
-#     the user, but replaces the password field with admin's
-#     disabled password hash display field.
-#     """
-#     password = ReadOnlyPasswordHashField()
-
-#     class Meta:
-#         model = User
-#         fields = ('__all__')
-
-#     def clean_password(self):
-#         # Regardless of what the user provides, return the initial value.
-#         # This is done here, rather than on the field, because the
-#         # field does not have access to the initial value
-#         return self.initial["password"]
-
-
 class UserAdminChangeForm(forms.ModelForm):
     """A form for updating users. Includes all the fields on
     the user, but replaces the password field with admin's
@@ -77,7 +60,8 @@ class UserAdminChangeForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ('email', 'password', 'active','admin', 'staff', 'hide_email')
+        fields = ('email', 'password', 'active',
+                  'admin', 'staff', 'hide_email')
 
     def clean_password(self):
         # Regardless of what the user provides, return the initial value.
@@ -94,7 +78,15 @@ class RegistrationForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ('email', 'username')
-    
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username').lower()
+        try:
+            User.objects.get(username__exact=username)
+        except User.DoesNotExist:
+            return username
+        raise forms.ValidationError("This username is already taken.")
+
     def clean_email(self):
         email = self.cleaned_data.get('email')
         qs = User.objects.filter(email=email)
@@ -111,15 +103,14 @@ class RegistrationForm(forms.ModelForm):
         return password2
 
     def save(self, commit=True):
-        # Save the provided password in hashed format
         user = super().save(commit=False)
-        user.set_password(self.cleaned_data["password"])
+        user.set_password(self.cleaned_data["password2"])
         if commit:
             user.save()
         return user
 
 
-class LoginForm(forms.ModelForm):
+class LogInForm(forms.ModelForm):
     password = forms.CharField(label='Password', widget=forms.PasswordInput)
 
     class Meta:
@@ -133,24 +124,5 @@ class LoginForm(forms.ModelForm):
             if not authenticate(email=email, password=password):
                 raise forms.ValidationError(
                     "Invalid email or password")
-
-
-# class LoginForm(forms.Form):
-    # email = forms.EmailField(label='Email')
-    # password = forms.CharField(widget=forms.PasswordInput)
-
-    # def __init__(self, request=None, *args, **kwargs):
-    #     self.request = request
-    #     super(LoginForm, self).__init__(*args, **kwargs)
-
-    # def clean(self, request=None):
-    #     # request = self.request
-    #     data = self.cleaned_data
-    #     email = data.get("email")
-    #     password = data.get("password")
-    #     user = authenticate(request, username=email, password=password)
-    #     if user is None:
-    #         raise forms.ValidationError("Invalid credentials")
-    #     login(self.request, user)
-    #     self.user = user
-    #     return data
+        else:
+            raise forms.ValidationError("Invlid Input.")
